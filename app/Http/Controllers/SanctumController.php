@@ -11,9 +11,13 @@ class SanctumController extends Controller
      */
     public function createToken(Request $request)
     {
+        $request->validate([
+            'token_name' => 'required|string'
+        ]);
+
         $token = $request->user()->createToken($request->token_name);
 
-        return ['token' => $token->plainTextToken];
+        return response()->json(['token' => $token->plainTextToken]);
     }
 
     /**
@@ -21,12 +25,17 @@ class SanctumController extends Controller
      */
     public function createTokenWithAbilities(Request $request)
     {
+        $request->validate([
+            'token_name' => 'required|string',
+            'abilities' => 'array'
+        ]);
+
         $token = $request->user()->createToken(
             $request->token_name,
             $request->abilities ?? []
         );
 
-        return ['token' => $token->plainTextToken];
+        return response()->json(['token' => $token->plainTextToken]);
     }
 
     /**
@@ -34,7 +43,7 @@ class SanctumController extends Controller
      */
     public function getTokens(Request $request)
     {
-        return ['tokens' => $request->user()->tokens];
+        return response()->json(['tokens' => $request->user()->tokens]);
     }
 
     /**
@@ -42,15 +51,19 @@ class SanctumController extends Controller
      */
     public function revokeToken(Request $request)
     {
+        $request->validate([
+            'token_id' => 'required|integer'
+        ]);
+
         $token = $request->user()->tokens()->find($request->token_id);
 
         if (!$token) {
-            return response(['error' => 'Token not found'], 404);
+            return response()->json(['error' => 'Token not found'], 404);
         }
 
         $token->delete();
 
-        return ['message' => 'Token revoked successfully'];
+        return response()->json(['message' => 'Token revoked successfully']);
     }
 
     /**
@@ -60,7 +73,7 @@ class SanctumController extends Controller
     {
         $request->user()->tokens()->delete();
 
-        return ['message' => 'All tokens revoked successfully'];
+        return response()->json(['message' => 'All tokens revoked successfully']);
     }
 
     /**
@@ -68,63 +81,54 @@ class SanctumController extends Controller
      */
     public function checkAbility(Request $request)
     {
-        $ability = $request->query('ability');
+        $request->validate([
+            'ability' => 'required|string'
+        ]);
 
-        if (!$ability) {
-            return response(['error' => 'Ability parameter is required'], 400);
-        }
+        $hasAbility = $request->user()->tokenCan($request->ability);
 
-        $hasAbility = $request->user()->tokenCan($ability);
-
-        return [
-            'ability' => $ability,
+        return response()->json([
+            'ability' => $request->ability,
             'has_ability' => $hasAbility
-        ];
+        ]);
     }
 
     /**
      * Example: Update server with authorization checks.
-     * Verifies both user ownership and token ability.
      */
     public function updateServer(Request $request, $serverId)
     {
-        // In a real application, you would fetch the server from database
-        // For this example, we'll assume a mock server object
         $server = (object)[
             'id' => $serverId,
-            'user_id' => auth()->id() // Simulating server ownership
+            'user_id' => auth()->id()
         ];
 
-        // Check both user ownership and token ability
         if ($request->user()->id === $server->user_id &&
             $request->user()->tokenCan('server:update')) {
-            return ['message' => 'Server updated successfully'];
+            return response()->json(['message' => 'Server updated successfully']);
         }
 
-        return response([
+        return response()->json([
             'error' => 'Unauthorized - insufficient permissions or invalid token ability'
         ], 403);
     }
 
     /**
      * Example: Delete server with authorization checks.
-     * Verifies both user ownership and token ability.
      */
     public function deleteServer(Request $request, $serverId)
     {
-        // In a real application, you would fetch the server from database
         $server = (object)[
             'id' => $serverId,
-            'user_id' => auth()->id() // Simulating server ownership
+            'user_id' => auth()->id()
         ];
 
-        // Check both user ownership and token ability
         if ($request->user()->id === $server->user_id &&
             $request->user()->tokenCan('server:delete')) {
-            return ['message' => 'Server deleted successfully'];
+            return response()->json(['message' => 'Server deleted successfully']);
         }
 
-        return response([
+        return response()->json([
             'error' => 'Unauthorized - insufficient permissions or invalid token ability'
         ], 403);
     }
