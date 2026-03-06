@@ -2,108 +2,77 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
-    // Register a new user here
-
-    public function register(Request $request) {
-
+    // Register a new user
+    public function register(Request $request)
+    {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-             'email' => 'required|string|email|max:255|unique:users',
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
+            'role' => 'nullable|string|in:Admin,Chairman,Teacher,Student',
         ]);
-        
+
         if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors()
-            ],422);
+            return back()->withErrors($validator)->withInput();
         }
 
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password)
+            'name'     => $request->input('name'),
+            'email'    => $request->input('email'),
+            'password' => Hash::make($request->input('password')),
         ]);
+
+        $user->assignRole($request->role ?? 'Student');
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // Auto-login after registration
+        auth()->login($user);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'User registered successfully',
-            'data' => $user,
-            'access_tojken' => $token,
-            'token_type' => 'Bearer',
-        ], 201);
+        return redirect()->route('dashboard');
     }
 
-    // Login user and return token
-
-    public function login(Request $request) {
-        
+    // Login user
+    public function login(Request $request)
+    {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|string|email',
-            'password' => 'required|string'
-
+            'email'    => 'required|string|email',
+            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors()
-            ], 422);
+            return back()->withErrors($validator)->withInput();
         }
 
-        $user = User::where('email', $request->email)->first();
+        $credentials = $request->only('email', 'password');
 
-        if(!$user || !Hash::check($request->password, $user->password)){
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid Credentials',
-            ], 401);
+        if (! auth()->attempt($credentials)) {
+            return back()->withErrors(['email' => 'Invalid credentials'])->withInput();
         }
 
-        // Revoke old tokens
-        $user->tokens()->delete();
-        
-        $token = $user->createToken('auth_token') -> plainTextToken;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Login succesfull',
-            'data' => $user,
-            'access_token' => $token,
-            'token_type' => 'Bearer'
-        ], 200);
+        return redirect()->route('dashboard');
     }
-    
-    
-    // Logout user (revoke token)
 
-    public function logout(Request $request){
+    // Logout user
+    public function logout(Request $request)
+    {
+        auth()->logout();
 
-        $request ->user()->currentAccessToken()->delete();
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'Logged out successfully'
-        ], 200);        
+        return redirect()->route('login');
     }
 
     // Get authenticated user profile
-
-
-    public function profile(Request $request) {
-
-        return response()->json([
-            'success' => true,
-            'data' => $request->user(),
-        ], 200);
+    public function profile()
+    {
+        return view('profile', [
+            'user' => auth()->user()->load('roles'),
+        ]);
     }
 }
